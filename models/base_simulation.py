@@ -188,7 +188,7 @@ sim_params = {
 exp = Experiment()
 c = config_sim(sim_params)
 exp.append_configs(
-    model_id='base_model',
+    model_id='sys_model',
     initial_state=genesis_states,
     partial_state_update_blocks=partial_state_update_blocks,
     sim_configs=c
