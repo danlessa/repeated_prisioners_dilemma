@@ -28,20 +28,16 @@ Authors: Michael Zargham (zargham@block.science), Danilo Lessa Bernardineli (dan
 """## Dependencies"""
 
 # For running the cadCAD representation
-from cadCAD_tools import easy_run
+
+from cadCAD.configuration.utils import config_sim
+from cadCAD.configuration import Experiment
+
 from cadCAD_tools.types import Param, ParamSweep
 from cadCAD_tools.preparation import prepare_params
 
 # For numerics & analytics
-import pandas as pd
 import numpy as np
 import scipy.stats as st
-import networkx as nx
-
-# For visualizations
-import plotly.express as px
-import hvplot.networkx as hvnx
-import holoviews as hv
 
 """## Model & simulation set-up"""
 
@@ -183,101 +179,17 @@ partial_state_update_blocks = [
     }
 ]
 
-"""## Simulation & Analytics"""
 
-df = easy_run(genesis_states, 
-              sys_params, 
-              partial_state_update_blocks,
-              SIMULATION_TIMESTEPS,
-              MONTE_CARLO_RUNS,
-              assign_params=True)
-
-df = (df.assign(mean_goodwill=lambda df: df.goodwill.map(lambda x: x.mean()))
-        .assign(std_goodwill=lambda df: df.goodwill.map(lambda x: x.std()))
+sim_params = {
+    'T': range(500),
+    'N': 3,
+    'M': sys_params
+}
+exp = Experiment()
+c = config_sim(sim_params)
+exp.append_configs(
+    model_id='base_model',
+    initial_state=genesis_states,
+    partial_state_update_blocks=partial_state_update_blocks,
+    sim_configs=c
 )
-
-fig = px.line(df, 
-              x='timestep',
-              y='mean_goodwill', 
-              facet_col='coordinate_goodwill',
-              facet_row='exploited_goodwill',
-              color='defect_goodwill',
-              line_group='run') 
-fig.update_traces(line=dict(width=1.0))
-fig.show()
-
-fig = px.line(df, 
-              x='timestep',
-              y='std_goodwill', 
-              facet_col='coordinate_goodwill',
-              facet_row='exploited_goodwill',
-              color='defect_goodwill',
-              line_group='run') 
-fig.update_traces(line=dict(width=1.0))
-fig.show()
-
-# Commented out IPython magic to ensure Python compatibility.
-# HACK for making it work with Google Colab
-# %env HV_DOC_HTML=true
-hv.extension('bokeh')
-
-G = nx.from_numpy_matrix(df.goodwill[15])
-
-options = {'with_labels': True,
-           'edge_width': 'weight',
-           'edge_color': 'weight'}
-
-viz = hvnx.draw_circular(G, **options)
-
-viz
-
-# Commented out IPython magic to ensure Python compatibility.
-# HACK for making it work with Google Colab
-# %env HV_DOC_HTML=true
-hv.extension('bokeh')
-
-def plot_goodwill(timestep, 
-                  coordinate_goodwill, 
-                  exploited_goodwill, 
-                  defect_goodwill,
-                  run,
-                  weight_scale=5.0,
-                  node_scale=5e2):
-
-  query = f"coordinate_goodwill == {coordinate_goodwill}"
-  query += f" & exploited_goodwill == {exploited_goodwill}"
-  query += f" & defect_goodwill == {defect_goodwill}"
-  query += f" & run == {run}" 
-
-  fig_df = df.query(query)
-  G = nx.from_numpy_matrix(fig_df.goodwill.iloc[timestep],
-                           True)
-  N = len(G.nodes)
-
-  for u in G.nodes:
-    G.nodes[u]['size'] = 0.0
-  
-  for u, v, data in G.edges(data=True):
-    weight = G[u][v]['weight'] * weight_scale
-    G[u][v]['weight'] = weight 
-    G.nodes[u]['size'] += node_scale * weight / (2 * N)
-    G.nodes[v]['size'] += node_scale * weight / (2 * N)
-  
-
-  options = {'with_labels': True,
-             'node_size': 'size',
-             'edge_color': 'weight',
-             'edge_width': 'weight'}
-
-  return hvnx.draw_circular(G, **options)
-
-dims = {'timestep': df.timestep.unique(),
-        'coordinate': df.coordinate_goodwill.unique(),
-        'exploited': df.exploited_goodwill.unique(),
-        'defect': df.defect_goodwill.unique(),
-        'run': df.run.unique()}
-
-dmap = hv.DynamicMap(plot_goodwill, kdims=list(dims.keys()))
-dmap = dmap.redim.values(**dims)
-dmap
-
